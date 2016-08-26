@@ -1,0 +1,119 @@
+//pull the attachment content
+if (len(attr_FileAttachment) == 0) {
+  data = "{ \"attr_StatusText\" : \"No file to upload from.\"}";
+  ret = commerce.cmLib_cleanSaveMainDocREST(_system_buyside_id , data , "");
+  return "1~attr_StatusText~No file to upload from."; //this will not get saved; but helps debugging BML
+}
+SERVICE_NOT_AVAIL = "Service not available.";
+
+//get credentials for JCS-SXs 2 legged OAuth client that was stored by you in secure columns of custom data tables
+encodedCredsJCSClient = util.utilLib_getBasicAuthCredentials("oauth_client", "NOT FOUND");
+//allow appropriate message to user, if integration client information was not located
+if(encodedCredsJCSClient== "NOT FOUND") {
+  data = "{ \"attr_StatusText\" : \"" + SERVICE_NOT_AVAIL + "\" }";
+  ret = commerce.cmLib_cleanSaveMainDocREST(_system_buyside_id , data , "");
+  return "1~attr_StatusText~unable to initiate connection"; //this will not get saved; but helps debugging BML
+}
+
+//get access token from the JCS-SX OAuth token endpoint for your domain; use client credential OAuth flow
+headers = dict("string");
+url = "https://{JCS-SX-OAuth-token-endpoint}";
+put(headers, "Authorization", "Basic " + encodedCredsJCSClient);
+put(headers, "Content-Type", "application/x-www-form-urlencoded;charset=UTF-8");
+put(headers, "Accept", "application/json");
+resp = urldatabypost(url, 
+       "grant_type=client_credentials&scope={JCS-SX-OAuth-Resource}",
+       "NO DATA", headers);
+
+// extract token (optionally, use the JSON bml functions shipped with CPQ 2016 R1)
+attrs = split( substring(trim(resp), 1, -1) , ","); //trim for spaces, remove begin-end "{" of json, and then split
+token = "";
+for attr in attrs {
+  attrInfo = split(attr, ":");
+  attrName = substring(trim(attrInfo[0]), 1, -1); //remove spaces, and then begin-end quotes
+  if("access_token" == attrName) {
+    token = substring(trim(attrInfo[1]), 1, -1);
+  }
+}
+
+if(token == "") {
+  data = "{ \"attr_StatusText\" : \"" + SERVICE_NOT_AVAIL + "\" }";
+  ret  = commerce.cmLib_cleanSaveMainDocREST(_system_buyside_id , data , "");
+  return "1~attr_StatusText~unable to obtain access to remote service"; //this will not get saved; but helps debugging BML
+}
+
+//get the file data from CPQ endpoint for file attachment; use Basic Auth flow with credentials for a full access user stored in secure data columns
+encodedCredsCPQ = util.utilLib_getBasicAuthCredentials("cpq_admin_user", "NOT FOUND");
+//allow appropriate message to user, if integration client information was not located
+if(encodedCredsCPQ== "NOT FOUND") {
+  data = "{ \"attr_StatusText\" : \"" + SERVICE_NOT_AVAIL + "\" }";
+  ret = commerce.cmLib_cleanSaveMainDocREST(_system_buyside_id , data , "");
+  return "1~attr_StatusText~unable to initiate local connection"; //this will not get saved; but helps debugging BML
+}
+
+url = "https://{CPQ-base-uri}/rest/v1/commerceProcesses/oraclecpqo/transactions/" + _system_buyside_id + "/attachments/attr_FileAttachment";
+headers = dict("string");
+put(headers, "Authorization", "Basic " + encodedCredsCPQ); 
+put(headers, "Accept", "application/json");
+xlsxResponse= urldata(url, "GET", headers);
+
+//parse the json string
+//optionally, use the JSON bml functions shipped with CPQ 2016 R1
+print(get(xlsxResponse, "Status-Code"));
+xlsxProperties = split( get(xlsxResponse, "Message-Body"), ",");
+xslxFileData = split( xlsxProperties[1], ":");
+encodedXlsx=substring(xslxFileData[1], 1, -1); //trim the quotes
+
+
+
+//POST to PAAS-SX extension for conversion to CSV; use Bearer token for authorization
+headers = dict("string");
+put(headers, "Content-Type", "application/json");
+put(headers, "Accept", "application/json");
+put(headers, "Authorization", "Bearer " + token);
+
+csvResponse = urldatabypost("https://{JCS-SX-baseuri}/{application-name}/Xlsx2Csv", "{ \"data\":\"" + encodedXlsx + "\"}",
+				"NO DATA", headers);
+
+//get the csv data, by parsing the json response
+csvProperties= split( csvResponse, ":");
+
+csv=substring(csvProperties[1], 1, -2); //remove the quotes and brace
+
+//to use the csv, replace / parse
+csv = replace(csv, "\\\"", "\"");
+csvRows=split(csv, "\\n");
+
+//add line items to quote
+success = false;
+errorStr = "";
+numProducts=0;
+for line in csvRows{
+   if (len(line) <> 0) {
+	items = split(line, ",");
+	partnum = replace(items[0],"\"", "");
+	partnum = trim(replace(items[0],"\"", ""));
+	if(partnum == "") { //skip line with no part num
+	  continue;
+	}
+	quantity = replace(items[1],"\"", "");
+	data = "{ \"_part_number\": \"" + partnum  + "\", \"_price_quantity\" : " + quantity + " }";
+	//call transaction API to add a line item
+	response2 = commerce.cmLib_addLineItemREST(_system_buyside_id , data, encodedCredsCPQ);
+	if(response2 == "ERROR") {
+	   errorStr = errorStr + partnum  + ", ";
+	} else {
+	   numProducts = numProducts + 1;
+	}
+  }
+}
+
+if(errorStr == "") {
+ data = "{ \"attr_StatusText\": \"Added " + string(numProducts) + " items\" }";
+ ret =commerce.cmLib_cleanSaveMainDocREST(_system_buyside_id , data , encodedCredsCPQ);
+ return "1~attr_StatusText~finished processing with no errors"; //this will not get saved; but helps debugging BML
+} else { //there were errors while adding some/all items
+ data = "{ \"attr_StatusText\": \"Added " + string(numProducts) + " items. There were some errors while adding some other items: " + errorStr + "\" }";
+ ret =commerce.cmLib_cleanSaveMainDocREST(_system_buyside_id , data , encodedCredsCPQ);
+ return "1~attr_StatusText~finished processing with some errors";
+}

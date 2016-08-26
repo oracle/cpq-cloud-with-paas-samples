@@ -1,0 +1,18 @@
+//update the main document of a transaction for the given commerce process, using REST API
+
+resourceName="commerceDocumentsOraclecpqoTransaction/";
+url = "https://{CPQ-base-uri}/rest/v1/" + resourceName + bs_id+ "/actions/cleanSave_t";
+credentials = basicAuthCredentials;
+if(credentials =="") {
+  credential = util.utilLib_getBasicAuthCredentials("cpq_admin_user", "NONE");
+  if(credentials == "NONE") {
+	  return "ERROR";
+  }
+}
+wrappedData="{ \"documents\": " + jsonData + "}";
+
+headers=dict("string");
+put(headers, "Content-Type", "application/json");
+put(headers, "Authorization", "Basic " + basicAuthCredentials);
+response = urldatabypost(url, wrappedData, "ERROR", headers);
+return response;

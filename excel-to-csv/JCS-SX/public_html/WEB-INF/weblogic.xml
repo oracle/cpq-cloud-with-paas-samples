@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright © 2016, Oracle and/or its affiliates. All rights reserved -->
+<weblogic-web-app xmlns="http://xmlns.oracle.com/weblogic/weblogic-web-app"
+                  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                  xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd http://xmlns.oracle.com/weblogic/weblogic-web-app http://xmlns.oracle.com/weblogic/weblogic-web-app/1.0/weblogic-web-app.xsd">
+    <session-descriptor>
+        <cookie-path>convertor</cookie-path>
+    </session-descriptor>
+    <library-ref>
+        <library-name>jax-rs</library-name>
+        <specification-version>1.1</specification-version>
+        <implementation-version>1.9</implementation-version>
+        <exact-match>false</exact-match>
+    </library-ref>
+    <library-ref>
+        <library-name>wsm-rest-lib</library-name>
+        <specification-version>11.1.1</specification-version>
+        <implementation-version>11.1.1</implementation-version>
+        <exact-match>true</exact-match>
+    </library-ref>
+</weblogic-web-app>

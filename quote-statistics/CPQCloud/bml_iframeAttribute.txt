@@ -1,0 +1,11 @@
+sampleURI = "<absolute uri of the stats.jsp page hosted via JCS-SX app: i.e. https://{JCS-SX-base-uri}/{web-application-context-root}/stats.jsp >";
+urlParams = "cpqServer={CPQ-base-uri}/rest/v1" +
+  "&resourceName=commerceDocumentsOraclecpqoTransaction" + 
+  "&custId=" + _transaction_customer_t_company_name +
+  "&currentResourceId=" + _system_buyside_id;
+ 
+sampleURI = sampleURI + "?" + urlParams;
+
+returnString = "<iframe id='sampleIframe' src='" + sampleURI + "' width='100%' height='150' >&amp;amp;amp;amp;lt;p&amp;amp;amp;amp;gt;No iframe support!&amp;amp;amp;amp;lt;/p&amp;amp;amp;amp;gt;</iframe>";
+
+return returnString;
